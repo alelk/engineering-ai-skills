@@ -1,0 +1,55 @@
+// ─── GraalVM Native Image — Gradle configuration ───
+// Add this to the build.gradle.kts of the application module.
+//
+// Required plugin:
+//   id("org.graalvm.buildtools.native") version "0.10.4"
+
+plugins {
+    // ...existing plugins...
+    id("org.graalvm.buildtools.native") version "0.10.4"
+    application
+}
+
+application {
+    // TODO: set your main class
+    mainClass.set("com.example.ApplicationKt")
+}
+
+graalvmNative {
+    binaries {
+        named("main") {
+            imageName.set("app")
+            mainClass.set(application.mainClass)
+
+            buildArgs.addAll(
+                "--no-fallback",
+                "--enable-http",
+                "--enable-https",
+                "-H:+ReportExceptionStackTraces",
+                // Uncomment for smaller binary (longer build):
+                // "-O2",
+            )
+
+            // Reflection / serialisation configuration
+            // GraalVM agent can auto-generate these configs:
+            //   ./gradlew -Pagent run
+            //   ./gradlew metadataCopy --task run
+            // Then commit META-INF/native-image/ directory.
+        }
+    }
+
+    // Use GraalVM agent to collect reflection metadata during tests
+    agent {
+        defaultMode.set("standard")
+        metadataCopy {
+            mergeWithExisting.set(true)
+            inputTaskNames.add("test")
+            outputDirectories.add("src/main/resources/META-INF/native-image")
+        }
+    }
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+

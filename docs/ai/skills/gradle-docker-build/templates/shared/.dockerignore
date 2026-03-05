@@ -1,0 +1,33 @@
+# ── Exclude from Docker build context ──
+# Keeps the context small → faster builds, no secret leaks.
+
+.git
+.gitignore
+.github
+.idea
+*.md
+LICENSE
+
+# Gradle build output
+build/
+**/build/
+.gradle/
+**/.gradle/
+
+# Node (if semantic-release is used in the same repo)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose*.yaml
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Environment files (never send to build context)
+.env
+.env.*
+

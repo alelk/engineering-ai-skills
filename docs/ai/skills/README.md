@@ -7,9 +7,10 @@ that an AI agent (or a human) can apply to a target project.
 
 ## Available skills
 
-| Skill | Description | Version |
-|-------|-------------|---------|
-| [`gradle-release-system`](gradle-release-system/SKILL.md) | Setup and operate release automation for Gradle projects (library, webapp, Docker app) | 2.0.0 |
+| Skill                                                     | Description                                                                            | Version |
+|-----------------------------------------------------------|----------------------------------------------------------------------------------------|---------|
+| [`gradle-release-system`](gradle-release-system/SKILL.md) | Setup and operate release automation for Gradle projects (library, webapp, Docker app) | 2.0.0   |
+| [`gradle-docker-build`](gradle-docker-build/SKILL.md)     | Build optimised Docker images for Gradle/JVM servers (JVM fat JAR or GraalVM native)   | 1.0.0   |
 
 ## Skill structure convention
 

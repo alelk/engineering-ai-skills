@@ -1,0 +1,73 @@
+# docker-compose for LOCAL DEVELOPMENT only.
+# For production, use docker-compose.prod.yaml or an orchestrator.
+#
+# Usage:
+#   docker compose up --build -d
+#   docker compose logs -f app
+#   docker compose down
+
+services:
+  # ── Database ──
+  db:
+    image: postgres:16-alpine
+    container_name: myapp-db
+    environment:
+      POSTGRES_USER: myapp
+      POSTGRES_PASSWORD: myapp
+      POSTGRES_DB: myapp
+    ports:
+      - "5433:5432"   # host:container — use 5433 to avoid conflict with local Postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myapp -d myapp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # ── Application ──
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GITHUB_USER: ${GITHUB_USER:-}
+        GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    container_name: myapp-server
+    ports:
+      - "8080:8080"
+    environment:
+      # ── Database ──
+      # TODO: adjust env-var names to match your config library (Hoplite, Typesafe, etc.)
+      DB__URL: "jdbc:postgresql://db:5432/myapp"
+      DB__DRIVER: "org.postgresql.Driver"
+      DB__USER: "myapp"
+      DB__PASSWORD: "myapp"
+      DB__POOLMAX: "10"
+      DB__POOLMIN: "2"
+
+      # ── Application secrets (dev defaults) ──
+      # TODO: add your application-specific env vars
+      JWT__SECRET: "change-me-in-production"
+      JWT__ISSUER: "myapp"
+      JWT__AUDIENCE: "myapp-api"
+
+      # ── Feature flags ──
+      CORS__ENABLED: "true"
+      CORS__ANYHOST: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+volumes:
+  db-data:
+
+networks:
+  app-network:
+    driver: bridge
+

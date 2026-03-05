@@ -1,0 +1,57 @@
+// ─── Shadow JAR configuration ───
+// Add this to the build.gradle.kts of the application module.
+//
+// Required plugins (add to plugins {} block or version catalog):
+//   alias(libs.plugins.shadow)    — com.github.johnrengelman.shadow
+//   alias(libs.plugins.ktor)      — io.ktor.plugin (if Ktor project)
+//   application                   — built-in
+
+plugins {
+    // ...existing plugins...
+    alias(libs.plugins.shadow)
+    application
+}
+
+// ─── Version from app.version ───
+val appVersionFile = rootProject.file("app.version")
+val appVersion: String = if (appVersionFile.exists()) {
+    appVersionFile.readText().trim().ifBlank { "0.0.1-SNAPSHOT" }
+} else {
+    "0.0.1-SNAPSHOT"
+}
+version = appVersion
+
+// ─── Application entry point ───
+application {
+    // TODO: set your main class
+    mainClass.set("com.example.ApplicationKt")
+}
+
+// ─── Shadow JAR ───
+tasks.shadowJar {
+    archiveBaseName.set("app")
+    archiveClassifier.set("all")
+    archiveVersion.set(version.toString())
+
+    // Merge META-INF/services files — required for SPI-based libraries:
+    // Flyway migrations, Ktor auto-loaded plugins, SLF4J providers, etc.
+    mergeServiceFiles {
+        include("META-INF/services/**")
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+
+    manifest {
+        // TODO: set your main class
+        attributes["Main-Class"] = "com.example.ApplicationKt"
+    }
+}
+
+// Ensure `gradle build` produces the fat JAR
+tasks.build {
+    dependsOn(tasks.shadowJar)
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+

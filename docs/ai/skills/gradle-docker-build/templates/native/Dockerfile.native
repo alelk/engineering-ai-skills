@@ -1,0 +1,99 @@
+# ============================================
+# Multi-stage Dockerfile — GraalVM Native Image
+# Produces a statically-linked binary for minimal image size
+# ============================================
+# ⚠️  Native-image builds are slower (~5–10 min) and require
+#     reflection/serialisation config for most frameworks.
+#     Start with the JVM Dockerfile and switch here only when needed.
+#
+# TODO: adjust module paths, labels, EXPOSE port, and HEALTHCHECK URL.
+
+# ---- Stage 1: Build fat JAR ----
+FROM gradle:8.11-jdk21-alpine AS jar-builder
+
+ARG GITHUB_USER
+ARG GITHUB_TOKEN
+
+ENV GITHUB_USER=${GITHUB_USER}
+ENV GITHUB_TOKEN=${GITHUB_TOKEN}
+
+WORKDIR /build
+
+# Dependency resolution (cached layer)
+COPY gradle.properties settings.gradle.kts build.gradle.kts ./
+COPY gradle ./gradle
+# TODO: list sub-project build files
+# COPY app/build.gradle.kts ./app/
+
+RUN gradle dependencies --no-daemon || true
+
+# Source code
+# TODO: list sub-project sources
+# COPY app/src ./app/src
+COPY app.version ./
+
+# Build fat JAR
+# TODO: adjust Gradle task
+RUN gradle :app:shadowJar --no-daemon
+
+# ---- Stage 2: Native image compilation ----
+FROM ghcr.io/graalvm/native-image-community:21-muslib AS native-builder
+
+WORKDIR /build
+
+# Copy the fat JAR from stage 1
+# TODO: adjust path
+COPY --from=jar-builder /build/app/build/libs/app-all.jar ./app.jar
+
+# Copy GraalVM reflection/serialisation configs if present
+# TODO: uncomment and adjust path if you have META-INF/native-image configs
+# COPY --from=jar-builder /build/app/src/main/resources/META-INF/native-image ./native-config
+
+# Compile native image
+# Flags:
+#   --static --libc=musl   → fully static binary (runs on scratch/alpine)
+#   --no-fallback           → fail if native-image can't compile something
+#   -H:+ReportExceptionStackTraces → better error messages
+#   --enable-http(s)        → enable HTTP client support
+#   -march=compatibility    → run on any x86-64 CPU (use `native` for build-machine optimisation)
+RUN native-image \
+    --static \
+    --libc=musl \
+    --no-fallback \
+    --enable-http \
+    --enable-https \
+    -H:+ReportExceptionStackTraces \
+    -march=compatibility \
+    -jar app.jar \
+    -o app
+
+# ---- Stage 3: Minimal runtime ----
+FROM alpine:3.20
+
+# OCI labels
+# TODO: update
+LABEL org.opencontainers.image.source="https://github.com/OWNER/REPO"
+LABEL org.opencontainers.image.description="Application Server (native)"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Install wget for health check (only ~1 MB)
+RUN apk add --no-cache wget
+
+# Non-root user
+RUN addgroup -g 1001 -S appgroup && \
+    adduser  -u 1001 -S appuser -G appgroup
+
+WORKDIR /app
+
+COPY --from=native-builder /build/app ./app
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["/app/app"]
+
