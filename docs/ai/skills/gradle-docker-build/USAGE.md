@@ -123,3 +123,61 @@ with semantic-release and GHCR publishing.
 - For private dependencies (GitHub Packages), pass `GITHUB_USER` / `GITHUB_TOKEN`
   as build-args — they are only used in the builder stage and not baked into the final image.
 
+## Kotlin/JS and Compose Multiplatform
+
+If the project includes Kotlin/JS or Compose Multiplatform modules:
+
+1. **Use Debian-based builder image** — `gradle:8.14-jdk21` (not `-alpine`).
+   Kotlin/JS downloads Node.js which requires glibc.
+
+2. **Add `--platform=linux/amd64`** to the builder stage if building on ARM64 hosts.
+
+3. **Use `jsBrowserDistribution`** instead of `jsBrowserProductionWebpack`.
+   The `jsBrowserDistribution` task produces a complete dist at
+   `build/dist/js/productionExecutable/` with index.html, resources, and Skiko WASM.
+
+4. **For the frontend nginx image**, remove the default nginx page:
+   ```dockerfile
+   RUN rm -rf /usr/share/nginx/html/*
+   COPY --from=builder /build/.../build/dist/js/productionExecutable/ /usr/share/nginx/html/
+   ```
+
+## Dockerfile.ci (runtime-only)
+
+For CI/CD pipelines, use `Dockerfile.ci` which accepts pre-built artifacts:
+
+```bash
+# Server
+docker build -f Dockerfile.ci --build-arg JAR_PATH=my-app.jar -t my-server:1.0 .
+
+# Webapp (from tar.gz)
+docker build -f webapp/Dockerfile.ci --build-arg DIST_ARCHIVE=webapp.tar.gz -t my-webapp:1.0 .
+```
+
+This avoids rebuilding everything from source when publishing Docker images.
+
+## docker-compose inline configs
+
+Use `configs` with `content` to store server configuration directly in docker-compose:
+
+```yaml
+services:
+  app:
+    configs:
+      - source: app-config
+        target: /app/config/application.yaml
+    environment:
+      APP_CONFIG: /app/config/application.yaml
+
+configs:
+  app-config:
+    content: |
+      server:
+        port: 8080
+      db:
+        url: "jdbc:postgresql://db:5432/myapp"
+```
+
+The application loads the config via `addFileSource(System.getenv("APP_CONFIG"))`.
+Secrets are passed as env vars and resolved by the config library (e.g. Hoplite `${ENV_VAR}`).
+

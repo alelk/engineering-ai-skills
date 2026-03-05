@@ -33,4 +33,12 @@ plugins:
       message: "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
 
   # 6. Create / update GitHub Release
-  - "@semantic-release/github"
+  # TODO: adjust asset paths to match your project build output
+  - - "@semantic-release/github"
+    - assets:
+        - path: path/to/app.jar
+          label: "Server fat JAR"
+        - path: webapp.tar.gz
+          label: "Web App JS bundle"
+        - path: app.version
+          label: "Version file"

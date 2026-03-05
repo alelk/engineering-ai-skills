@@ -5,7 +5,12 @@
 # TODO: adjust module paths, labels, EXPOSE port, and HEALTHCHECK URL.
 
 # ---- Stage 1: Build ----
-FROM gradle:8.11-jdk21-alpine AS builder
+# linux/amd64 — required when Kotlin/JS or KMP modules are present.
+# The Kotlin Gradle plugin downloads Node.js for the build platform;
+# on ARM64 hosts (Apple Silicon) the downloaded Node binary needs glibc
+# which is not available in Alpine. Using Debian-based image + amd64 fixes this.
+# If the project is purely JVM (no JS/KMP), you can remove --platform and use alpine.
+FROM --platform=linux/amd64 gradle:8.14-jdk21 AS builder
 
 # Build arguments for private registry authentication (e.g. GitHub Packages)
 ARG GITHUB_USER
@@ -20,6 +25,7 @@ WORKDIR /build
 # Copy only the files Gradle needs to resolve dependencies.
 COPY gradle.properties settings.gradle.kts build.gradle.kts ./
 COPY gradle ./gradle
+COPY app.version ./
 
 # TODO: list every sub-project build file for optimal caching
 # COPY app/build.gradle.kts   ./app/
@@ -31,7 +37,6 @@ RUN gradle dependencies --no-daemon || true
 # TODO: list every sub-project source directory
 # COPY app/src   ./app/src
 # COPY infra/src ./infra/src
-COPY app.version ./
 
 # Build fat JAR via Shadow plugin (merges META-INF/services for SPI)
 # TODO: adjust the Gradle task to your application module

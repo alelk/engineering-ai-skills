@@ -1,0 +1,45 @@
+# ============================================
+# Dockerfile.ci — Runtime-only image (no Gradle build)
+# Used in CI/CD when the fat JAR is pre-built and attached
+# as a release asset. Dramatically faster than full rebuild.
+# ============================================
+# Usage:
+#   docker build -f Dockerfile.ci \
+#     --build-arg JAR_PATH=my-app.jar \
+#     -t ghcr.io/owner/repo:1.0.0 .
+
+FROM eclipse-temurin:21-jre-alpine
+
+# TODO: update source URL, description, and license
+LABEL org.opencontainers.image.source="https://github.com/OWNER/REPO"
+LABEL org.opencontainers.image.description="Application Server"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Path to JAR relative to build context
+ARG JAR_PATH=app.jar
+
+# Non-root user
+RUN addgroup -g 1001 -S appgroup && \
+    adduser  -u 1001 -S appuser -G appgroup
+
+WORKDIR /app
+
+COPY ${JAR_PATH} ./app.jar
+
+RUN chown -R appuser:appgroup /app
+USER appuser
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+
+ENV JAVA_OPTS="\
+  -XX:+UseContainerSupport \
+  -XX:MaxRAMPercentage=75.0 \
+  -XX:+UseG1GC \
+  -XX:+UseStringDeduplication \
+  -Djava.security.egd=file:/dev/./urandom"
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
+

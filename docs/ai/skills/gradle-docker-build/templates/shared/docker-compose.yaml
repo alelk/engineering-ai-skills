@@ -39,24 +39,13 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # ── Database ──
-      # TODO: adjust env-var names to match your config library (Hoplite, Typesafe, etc.)
-      DB__URL: "jdbc:postgresql://db:5432/myapp"
-      DB__DRIVER: "org.postgresql.Driver"
-      DB__USER: "myapp"
-      DB__PASSWORD: "myapp"
-      DB__POOLMAX: "10"
-      DB__POOLMIN: "2"
-
-      # ── Application secrets (dev defaults) ──
-      # TODO: add your application-specific env vars
-      JWT__SECRET: "change-me-in-production"
-      JWT__ISSUER: "myapp"
-      JWT__AUDIENCE: "myapp-api"
-
-      # ── Feature flags ──
-      CORS__ENABLED: "true"
-      CORS__ANYHOST: "true"
+      # Path to external config file (mounted via configs)
+      APP_CONFIG: /app/config/application.yaml
+      # TODO: add your application-specific secrets from .env
+      # MY_SECRET: "${MY_SECRET:-default}"
+    configs:
+      - source: app-config
+        target: /app/config/application.yaml
     depends_on:
       db:
         condition: service_healthy
@@ -64,8 +53,40 @@ services:
       - app-network
     restart: unless-stopped
 
+  # ── Frontend (optional — for projects with a web UI) ──
+  # webapp:
+  #   build:
+  #     context: .
+  #     dockerfile: frontend/Dockerfile
+  #   container_name: myapp-webapp
+  #   ports:
+  #     - "3000:80"
+  #   environment:
+  #     API_BASE_URL: "${API_BASE_URL:-http://localhost:8080}"
+  #   depends_on:
+  #     - app
+  #   networks:
+  #     - app-network
+  #   restart: unless-stopped
+
 volumes:
   db-data:
+
+# ── Inline application configuration ──
+# All server settings in one place. Secrets are injected via env vars
+# and resolved by the config library (e.g. Hoplite ${ENV_VAR:-default}).
+configs:
+  app-config:
+    content: |
+      # TODO: replace with your actual application config
+      server:
+        port: 8080
+        host: "0.0.0.0"
+      db:
+        url: "jdbc:postgresql://db:5432/myapp"
+        user: "myapp"
+        password: "myapp"
+        poolSize: 10
 
 networks:
   app-network:

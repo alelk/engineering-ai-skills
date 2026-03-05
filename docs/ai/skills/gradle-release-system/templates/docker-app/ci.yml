@@ -36,22 +36,12 @@ jobs:
           docker --version
           docker info
 
-      - name: Build and Test
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew build check
-
-      - name: Publish Test Results
-        uses: mikepenz/action-junit-report@v4
-        if: success() || failure()
-        with:
-          report_paths: "**/build/test-results/test/TEST-*.xml"
-
-      - name: Set up Node 20
+      # ── Node + semantic-release: only on release branches ──
+      - name: Set up Node 20 (for semantic-release)
+        if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'next')
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-        if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'next')
 
       - name: Install semantic-release plugins
         if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'next')
@@ -63,17 +53,39 @@ jobs:
           @semantic-release/github@11
           @semantic-release/exec@6
 
+      # dry-run resolves the next version and writes it to app.version
+      # via prepare.sh, so Gradle builds artifacts with the correct version.
+      - name: Determine version (dry-run)
+        if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'next')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release --dry-run || true
+
+      - name: Show resolved app.version
+        if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'next')
+        run: echo "app.version = $(cat app.version)"
+
+      - name: Build and Test
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # TODO: add project-specific Gradle tasks (e.g. :tgminiapp:jsBrowserDistribution)
+        run: ./gradlew build check --no-daemon
+
+      # TODO: if the project has a frontend, package it as tar.gz here:
+      # - name: Package webapp dist as tar.gz
+      #   if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'next')
+      #   run: tar -czf webapp.tar.gz -C path/to/dist .
+
+      - name: Publish Test Results
+        uses: mikepenz/action-junit-report@v4
+        if: success() || failure()
+        with:
+          report_paths: "**/build/test-results/**/TEST-*.xml"
+
+      # ── Semantic Release — creates GitHub Release and attaches artifacts ──
+      # Configure assets in .releaserc.yaml → @semantic-release/github → assets
       - name: Release
         if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'next')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
-
-      - name: Upload app.version
-        if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'next')
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-version
-          path: app.version
-          retention-days: 30
-
